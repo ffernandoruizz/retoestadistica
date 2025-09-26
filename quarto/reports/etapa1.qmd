@@ -1,0 +1,79 @@
+---
+title: "Etapa 1. El contexto"
+author: "Blanca Ruiz"
+date: today
+format:
+  docx:
+    toc: false          # Do not include table of contents
+
+execute:
+  echo: true          # Show code in the output document
+---
+
+# Exploración de la base de datos
+
+```{r}
+library(tidyverse)
+library(here)
+
+M19 <- read_csv(here("data", "Datos_molec_2019.csv"))
+M20 <- read_csv(here("data", "Datos_molec_2020.csv"))
+str(M19)
+```
+
+1980 observaciones con 108 variables. La mayoría de las variables son cualitativas, pero están insertas como números. Se tiene que revisar en el contexto del problema cuáles son realmente numéricas.
+
+## Diccionarios
+
+```{r}
+Dicc19 <- read_csv(here("data", "Diccionario_molec_2019.csv"))
+```
+
+El diccionario indica qué significan las variables en el contexto del problema, pero no a qué equivalen sus categorías. Eso se debe leer en el archivo de descriptor de las preguntas y en el cuestionario.
+
+## Resumen de las variables
+
+```{r}
+summary(M19)
+```
+
+Aunque en la mayor parte de las variables, las medidas calculadas (media, mediana, mínimo, máximo), en muchas no tienen sentido porque son categóricas. El summary permite ver si la variable tiene datos faltantes (NA´s), por ejemplo, la variable anio tiene valores faltantes.
+
+# Selección de las variables
+
+Por ejemplo, si me interesa analizar las variables 3 a 34 (se revisa en la base de datos el número de columna que tiene la variable de interés):
+
+```{r}
+M19selec <- M19[3:34]
+M20selec <- M20[3:34]
+```
+
+## Datos perdidos o faltantes
+
+Visualizo si las variables de interés tienen datos perdidos:
+
+```{r}
+summary(M20selec)
+```
+
+La variable anio tiene 39 datos faltantes. Anio está en la columna 10 en la base de datos de las variables de interés.
+
+Para calcular el porcentaje de datos faltantes que tiene y que se los vamos a quitar: 
+
+```{r}
+sum(is.na(M20selec[, 10])) / length(M20selec[, 10])
+```
+
+## Para quitar los NA's
+
+```{r}
+M20selec <- na.omit(M20selec)
+summary(M20selec)
+```
+
+Se verifica que ya no hay datos perdidos en mi data set de interés.
+
+
+
+
+
