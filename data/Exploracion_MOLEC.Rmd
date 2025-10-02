@@ -1,0 +1,75 @@
+---
+title: "Etapa 1. Hábitos de Lectura"
+author: "Fernando Ruiz"
+date: "2025-10-02"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Exploración de la base de datos
+
+```{r}
+M23 = read.csv("Datos_molec_2023.CSV")
+M24 = read.csv("Datos_molec_2024.csv")
+str(M23)
+```
+
+1996 observaciones con 108 variables. 
+
+## Diccionarios
+
+```{r}
+Dicc23 = read.csv("Diccionario_molec_2023.csv")
+Dicc24 = read.csv("Diccionario_molec_2024.csv")
+```
+
+Los diccionarios describen el significado de cada variable y sus catálogos.
+
+## Resumen de las variables
+
+```{r}
+summary(M23)
+```
+
+El resumen permite detectar valores extremos y datos faltantes. 
+
+# Selección de las variables
+
+Para analizar la pregunta de investigación se seleccionan las columnas `p36_1`, `p36_2`, `p36_3`, `p36_4`, `p4`, `p26`, `p32` y `factor`. En la base M23 corresponden a las columnas 97, 98, 99, 100, 22, 77, 84 y 101.
+
+```{r}
+M23selec = M23[c(97,98,99,100,22,77,84,101)]
+M24selec = M24[c(97,98,99,100,22,77,84,101)]
+```
+
+## Datos perdidos o faltantes
+
+Datos perdidos para 2023 y 2024.
+
+```{r}
+summary(M23selec)
+summary(M24selec)
+```
+
+Porcentaje de valores faltantes para `p4`, que es la quinta columna de cada conjunto seleccionado.
+
+```{r}
+sum(is.na(M23selec[,5])) / length(M23selec[,5])
+sum(is.na(M24selec[,5])) / length(M24selec[,5])
+```
+
+## Para quitar los NA's
+
+Se aplica `na.omit` para garantizar que los subconjuntos estén limpios antes del análisis.
+
+```{r}
+M23selec = na.omit(M23selec)
+M24selec = na.omit(M24selec)
+summary(M23selec)
+summary(M24selec)
+```
+
+Se confirma que las bases depuradas mantienen el tamaño completo y ya están listas para continuar con el análisis de hábitos de lectura.
