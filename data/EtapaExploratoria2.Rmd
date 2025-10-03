@@ -1,0 +1,7 @@
+---
+title: "EtapaExploratoria2"
+author: "Alejandro Alfaro"
+date: "2025-10-02"
+output: word_document
+---
+
