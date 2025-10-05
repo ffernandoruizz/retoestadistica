@@ -4,4 +4,11 @@ author: "Alejandro Alfaro"
 date: "2025-10-02"
 output: word_document
 ---
+```{r}
+library(ggplot2)
+library(e1071)
+
+```
+
+#ACUERDENSE DE USAR renv::restore() para añadir automaticamente la libreria, la necesitamos para las graficas de la parte 2
 
