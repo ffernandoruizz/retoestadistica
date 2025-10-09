@@ -1,14 +1,280 @@
 ---
-title: "EtapaExploratoria2"
-author: "Alejandro Alfaro"
-date: "2025-10-02"
+title: "Etapa exploratoria 2: Análisis descriptivo MOLEC"
+author: "Equipo de investigación"
+date: "`r Sys.Date()`"
 output: word_document
 ---
-```{r}
-library(ggplot2)
-library(e1071)
 
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
 ```
 
-#ACUERDENSE DE USAR renv::restore() para añadir automaticamente la libreria, la necesitamos para las graficas de la parte 2
+# Preparación de los datos
 
+```{r librerias}
+library(dplyr)
+library(readr)
+library(ggplot2)
+library(tidyr)
+library(forcats)
+library(e1071)   # para sesgo y curtosis
+library(scales)
+```
+
+```{r lectura}
+# Detectamos si el script se ejecuta dentro de la carpeta data
+data_dir <- if ("molec_light_2019_2021_2023.csv" %in% list.files()) "." else "data"
+
+datos <- read_csv(
+  file.path(data_dir, "molec_light_2019_2021_2023.csv"),
+  show_col_types = FALSE
+)
+
+datos <- datos %>%
+  mutate(
+    year = factor(year),
+    p5 = factor(
+      p5,
+      levels = 1:6,
+      labels = c("Trabajo", "Estudio", "Cultura/al día",
+                 "Gusto/entretenimiento", "Religión", "Otro"),
+      ordered = TRUE
+    ),
+    p32 = factor(
+      p32,
+      levels = 1:6,
+      labels = c("Falta de interés", "Prefiere otras actividades",
+                 "Falta de tiempo", "Falta de dinero",
+                 "Problemas de salud", "Otro"),
+      ordered = TRUE
+    ),
+    p34_3 = factor(
+      p34_3,
+      levels = 1:2,
+      labels = c("Sí", "No"),
+      ordered = TRUE
+    )
+  )
+
+skim <- datos %>%
+  summarise(
+    registros = n(),
+    columnas = ncol(.),
+    libros_miss = mean(is.na(p4)),
+    minutos_miss = mean(is.na(p26))
+  )
+skim
+```
+
+# Variables cuantitativas
+
+Trabajamos con las variables:
+
+- `p4`: número de libros leídos en los últimos 12 meses.
+- `p26`: minutos continuos que dedica a la lectura.
+
+## Medidas descriptivas por año
+
+```{r funciones}
+resumen_cuant <- function(x) {
+  n_valid <- sum(!is.na(x))
+  if (n_valid < 2) {
+    return(tibble(
+      n = n_valid, media = NA_real_, mediana = NA_real_,
+      rango_medio = NA_real_, desv_est = NA_real_, cv = NA_real_,
+      q1 = NA_real_, q3 = NA_real_, sesgo = NA_real_, curtosis = NA_real_
+    ))
+  }
+  
+  minimo <- min(x, na.rm = TRUE)
+  maximo <- max(x, na.rm = TRUE)
+  media_val <- mean(x, na.rm = TRUE)
+  desv_val <- sd(x, na.rm = TRUE)
+  
+  tibble(
+    n = n_valid,
+    media = media_val,
+    mediana = median(x, na.rm = TRUE),
+    rango_medio = (minimo + maximo) / 2,
+    desv_est = desv_val,
+    cv = ifelse(is.na(media_val) || media_val == 0, NA_real_, desv_val / media_val),
+    q1 = quantile(x, 0.25, na.rm = TRUE),
+    q3 = quantile(x, 0.75, na.rm = TRUE),
+    sesgo = skewness(x, na.rm = TRUE),
+    curtosis = kurtosis(x, na.rm = TRUE)
+  )
+}
+```
+
+```{r cuantitativas_p4}
+stats_p4 <- datos %>%
+  group_by(year) %>%
+  summarise(resumen_cuant(p4)) %>%
+  ungroup()
+stats_p4
+```
+
+```{r cuantitativas_p26}
+stats_p26 <- datos %>%
+  group_by(year) %>%
+  summarise(resumen_cuant(p26)) %>%
+  ungroup()
+stats_p26
+```
+
+## Visualizaciones
+
+```{r boxplots}
+ggplot(datos, aes(x = year, y = p4, fill = year)) +
+  geom_boxplot(outlier.color = "firebrick") +
+  labs(title = "Número de libros leídos por año",
+       x = "Año", y = "Libros en los últimos 12 meses") +
+  theme_minimal()
+```
+
+```{r histogramas}
+ggplot(datos, aes(x = p26, fill = year)) +
+  geom_histogram(binwidth = 10, color = "white", alpha = 0.6, position = "identity") +
+  labs(title = "Distribución de minutos continuos de lectura",
+       x = "Minutos", y = "Frecuencia") +
+  theme_minimal()
+```
+
+## Correlación entre variables cuantitativas
+
+```{r correlacion}
+pares <- datos %>%
+  select(p4, p26) %>%
+  drop_na()
+
+correlacion <- cor(pares$p4, pares$p26)
+correlacion
+```
+
+```{r dispersion}
+ggplot(datos, aes(x = p4, y = p26, color = year)) +
+  geom_point(alpha = 0.4) +
+  geom_smooth(method = "lm", se = FALSE, color = "black") +
+  labs(title = "Relación entre libros leídos y minutos de lectura",
+       x = "Libros en los últimos 12 meses",
+       y = "Minutos continuos") +
+  theme_minimal()
+```
+
+# Variables cualitativas
+
+Analizamos dos variables ordinales:
+
+- `p5`: motivo principal para leer.
+- `p32`: motivo principal para no leer.
+
+## Tablas de frecuencia
+
+```{r frecuencia_p5}
+freq_p5 <- datos %>%
+  count(year, p5) %>%
+  group_by(year) %>%
+  mutate(prop = n / sum(n)) %>%
+  ungroup()
+freq_p5
+```
+
+```{r frecuencia_p32}
+freq_p32 <- datos %>%
+  count(year, p32) %>%
+  group_by(year) %>%
+  mutate(prop = n / sum(n)) %>%
+  ungroup()
+freq_p32
+```
+
+## Mediana para variables ordinales
+
+```{r mediana_p5}
+mediana_p5 <- datos %>%
+  group_by(year) %>%
+  summarise(mediana = median(as.numeric(p5), na.rm = TRUE))
+mediana_p5
+```
+
+```{r mediana_p32}
+mediana_p32 <- datos %>%
+  group_by(year) %>%
+  summarise(mediana = median(as.numeric(p32), na.rm = TRUE))
+mediana_p32
+```
+
+## Gráficas de barras
+
+```{r barras_p5}
+ggplot(freq_p5, aes(x = p5, y = prop, fill = year)) +
+  geom_col(position = "dodge") +
+  labs(title = "Motivo principal para leer (p5)",
+       x = "Motivo", y = "Proporción") +
+  scale_y_continuous(labels = scales::percent) +
+  theme_minimal()
+```
+
+```{r barras_p32}
+ggplot(freq_p32, aes(x = p32, y = prop, fill = year)) +
+  geom_col(position = "dodge") +
+  labs(title = "Motivo principal para no leer (p32)",
+       x = "Motivo", y = "Proporción") +
+  scale_y_continuous(labels = scales::percent) +
+  theme_minimal()
+```
+
+# Relación entre variables cuantitativas y cualitativas
+
+Nos interesa comparar los hábitos lectores según la estimulación en casa. Usamos `p34_3` (padres leían al entrevistado).
+
+## Medidas por categoría
+
+```{r medidas_por_categoria}
+por_categoria <- datos %>%
+  group_by(year, p34_3) %>%
+  summarise(
+    media_libros = mean(p4, na.rm = TRUE),
+    mediana_libros = median(p4, na.rm = TRUE),
+    cv_libros = {
+      m <- mean(p4, na.rm = TRUE)
+      desv <- sd(p4, na.rm = TRUE)
+      ifelse(is.na(m) || m == 0, NA_real_, desv / m)
+    },
+    media_minutos = mean(p26, na.rm = TRUE),
+    mediana_minutos = median(p26, na.rm = TRUE),
+    n = n()
+  ) %>%
+  ungroup()
+por_categoria
+```
+
+## Gráficos comparativos
+
+```{r box_libros_categoria}
+ggplot(datos, aes(x = p34_3, y = p4, fill = p34_3)) +
+  geom_boxplot(outlier.color = "firebrick") +
+  facet_wrap(~ year) +
+  labs(title = "Libros leídos por estimulación en casa (p34_3)",
+       x = "¿Padres leían al entrevistado?", y = "Libros en los últimos 12 meses") +
+  theme_minimal() +
+  guides(fill = "none")
+```
+
+```{r box_minutos_categoria}
+ggplot(datos, aes(x = p34_3, y = p26, fill = p34_3)) +
+  geom_boxplot(outlier.color = "firebrick") +
+  facet_wrap(~ year) +
+  labs(title = "Minutos continuos por estimulación en casa (p34_3)",
+       x = "¿Padres leían al entrevistado?", y = "Minutos continuos de lectura") +
+  theme_minimal() +
+  guides(fill = "none")
+```
+
+# Interpretación sugerida
+
+- **Tendencia central y dispersión**: revisar las tablas de `stats_p4` y `stats_p26` para describir cómo cambian media, mediana, rango medio y coeficiente de variación en cada año.
+- **Forma de la distribución**: comparar los valores de sesgo y curtosis junto con los histogramas para evaluar simetría y concentración de los datos.
+- **Atípicos**: identificar posibles outliers observando los bigotes y puntos extremos en los boxplots.
+- **Variables categóricas**: utilizar las tablas y gráficas de frecuencia para describir los motivos principales de lectura/no lectura y cómo se redistribuyen en el tiempo. Las medianas ordinales resaltan la categoría central más frecuente en cada año.
+- **Relaciones**: el coeficiente de correlación y el diagrama de dispersión permiten ver si mayores cantidades de libros se acompañan de sesiones de lectura más largas. Los gráficos segmentados por `p34_3` muestran cómo difieren las distribuciones cuantitativas según la estimulación lectora en la niñez.

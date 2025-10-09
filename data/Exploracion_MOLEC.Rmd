@@ -5,10 +5,6 @@ date: "`r Sys.Date()`"
 output: word_document
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
-```
-
 # Exploración de las bases 2019, 2021 y 2023
 
 ```{r}
