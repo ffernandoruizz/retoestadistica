@@ -272,7 +272,7 @@ ggplot(datos, aes(x = p34_3, y = p26, fill = p34_3)) +
 ```
 
 # Interpretación sugerida
-
+pn
 - **Tendencia central y dispersión**: revisar las tablas de `stats_p4` y `stats_p26` para describir cómo cambian media, mediana, rango medio y coeficiente de variación en cada año.
 - **Forma de la distribución**: comparar los valores de sesgo y curtosis junto con los histogramas para evaluar simetría y concentración de los datos.
 - **Atípicos**: identificar posibles outliers observando los bigotes y puntos extremos en los boxplots.
