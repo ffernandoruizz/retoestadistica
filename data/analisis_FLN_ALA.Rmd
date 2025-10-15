@@ -1,3 +1,4 @@
+---
 title: "Análisis Inferencial FLN y ALA"
 author: "Equipo de investigación"
 date: "`r Sys.Date()`"
@@ -14,7 +15,11 @@ library(car)
 
 ## Introducción
 
-Se cargan los datos combinados del cuestionario 2019–2023.
+El presente análisis busca determinar si las personas con alto Fomento a la Lectura en la Niñez (FLN) conservaron su capacidad de atención lectora (medida como minutos continuos de lectura por sesión, variable P26) durante y después de la pandemia, en comparación con quienes tuvieron bajo FLN.
+
+Se analizan los periodos prepandemia (2019), durante la pandemia (2021) y postpandemia (2023), con el fin de identificar si el tiempo de lectura disminuyó y si el FLN actuó como un factor protector frente a dicha caída.
+
+Se cargan los datos combinados del cuestionario 2019–2023 para sostener el análisis inferencial. El nivel de significancia adoptado en todas las estimaciones es α = 0.04, equivalente a un 96% de confianza.
 
 ```{r carga_datos}
 datos <- readr::read_csv(
@@ -39,16 +44,17 @@ names(datos)
 dim(datos)
 ```
 
-El análisis se centra en la relación entre el fomento a la lectura en la niñez (FLN) y la actividad lectora actual (ALA), entendida como los minutos continuos que una persona dedica a leer en una sesión (`P26`). La pregunta de investigación se formula así: **¿El FLN contribuye a mantener sesiones de lectura más prolongadas en la adultez?**
+El análisis se centra en seguir la trayectoria del tiempo de lectura (ALA = P26) antes, durante y después de la pandemia para los grupos con FLN alto y bajo. La pregunta de investigación se formula así: **¿El fomento lector temprano permitió conservar sesiones de lectura prolongadas durante todo el periodo pandémico en comparación con quienes tuvieron un FLN bajo?**
 
-El objetivo principal es evaluar si las personas leen menos tiempo seguido y, en particular, determinar si contar con estímulos lectores tempranos amortigua esa reducción. El documento expone una estrategia inferencial para contrastar la influencia del FLN en la retención lectora.
+El objetivo principal es comparar los cambios temporales en la duración de las sesiones de lectura y, en particular, determinar si contar con estímulos lectores tempranos amortigua la reducción que pudo haber ocurrido durante la emergencia sanitaria. El documento actualiza la estrategia inferencial previa para incorporar el eje temporal y contrastar la interacción entre FLN y periodo.
 
 ## Construcción de variables
 
-- **FLN (Fomento a la Lectura en la Niñez).** Se modela a partir de los reactivos que describen experiencias lectoras en el hogar y la escuela mediante un modelo de mínimos cuadrados ordinarios con `P26` como variable dependiente. El puntaje ajustado (`FLN_score`) resume el aporte del conjunto de ítems al tiempo de lectura actual.
+- **FLN (Fomento a la Lectura en la Niñez).** Se modela a partir de los reactivos que describen experiencias lectoras en el hogar y la escuela mediante un modelo de mínimos cuadrados ordinarios con `P26` como variable dependiente. El puntaje ajustado (`FLN_score`) resume el aporte del conjunto de ítems al tiempo de lectura actual en los tres años observados.
 - **Validación alternativa.** Como verificación robusta se propone un Análisis de Componentes Principales (PCA) sobre los indicadores de FLN para confirmar la consistencia del constructo. Si los componentes convergen con el puntaje del modelo lineal, se mantiene la solución; de lo contrario, se reevalúa la ponderación.
-- **ALA (Actividad Lectora Actual).** Se define como `P26`, la cantidad de minutos continuos de lectura durante la sesión más reciente.
-- **Clasificación de FLN.** Se construye una variable categórica `FLN_cat` con tres niveles —Bajo, Medio, Alto— usando los cuantiles 0.33 y 0.66 del `FLN_score`. Esta segmentación permite contrastar diferencias de tiempo de lectura entre grupos comparables.
+- **ALA (Actividad Lectora Actual).** Se define como `P26`, la cantidad de minutos continuos de lectura durante la sesión más reciente y funciona como proxy de la atención lectora.
+- **Periodo.** Se crea una variable categórica `Periodo` con tres niveles —“Pre-pandemia” (2019), “Durante pandemia” (2021) y “Post-pandemia” (2023)—; cada uno representa el levantamiento del cuestionario antes de la emergencia sanitaria, durante las restricciones sanitarias y tras la reapertura gradual, respectivamente.
+- **Clasificación de FLN.** Se construye una variable categórica `FLN_cat` con tres niveles —Bajo, Medio, Alto— usando los cuantiles 0.33 y 0.66 del `FLN_score`. Esta segmentación permite contrastar diferencias de tiempo de lectura entre grupos comparables en cada periodo.
 
 ```{r construccion_fln}
 # puntaje continuo a partir del modelo lineal
@@ -57,6 +63,15 @@ modelo_fln <- lm(P26 ~ P34_1 + P34_2 + P34_3 + P36_1 + P36_2 + P36_3 + P36_4, da
 datos <- datos %>%
   mutate(
     FLN_score = predict(modelo_fln, newdata = datos),
+    Periodo = factor(
+      dplyr::case_when(
+        year == 2019 ~ "Pre-pandemia",
+        year == 2021 ~ "Durante pandemia",
+        year == 2023 ~ "Post-pandemia",
+        TRUE ~ NA_character_
+      ),
+      levels = c("Pre-pandemia", "Durante pandemia", "Post-pandemia")
+    ),
     FLN_cat = cut(
       FLN_score,
       breaks = quantile(FLN_score, probs = c(0, 1 / 3, 2 / 3, 1), na.rm = TRUE),
@@ -67,61 +82,99 @@ datos <- datos %>%
 ```
 ## Estadística descriptiva
 
-La exploración inicial resume el comportamiento de `P26` por nivel de FLN y visualiza la relación entre ambas variables.
+La exploración inicial resume el comportamiento de `P26` cruzando los niveles de FLN y los tres periodos (pre, durante y post pandemia) para identificar patrones temporales en la duración de las sesiones de lectura.
 
 ```{r tabla_resumen}
 resumen_p26 <- datos %>%
-  group_by(FLN_cat) %>%
+  group_by(Periodo, FLN_cat) %>%
   summarise(
     n = sum(!is.na(P26)),
     media = mean(P26, na.rm = TRUE),
-    sd = sd(P26, na.rm = TRUE)
-  )
+    sd = sd(P26, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  arrange(Periodo, FLN_cat)
 resumen_p26
 ```
 
-El nivel de FLN se asocia con cambios observables en la media y la dispersión del tiempo de lectura.
+Esta tabla permite observar si el tiempo de lectura disminuyó del periodo pre-pandemia hacia 2021 y si se recuperó o mantuvo en 2023, resaltando si la caída es menor entre quienes contaron con un FLN alto.
 
 ```{r boxplot_p26}
-ggplot(datos, aes(x = FLN_cat, y = P26, fill = FLN_cat)) +
+ggplot(datos, aes(x = Periodo, y = P26, fill = FLN_cat)) +
   geom_boxplot(outlier.color = "firebrick") +
   labs(
-    title = "Duración de lectura (P26) por nivel de FLN",
-    x = "Nivel de FLN",
-    y = "Minutos continuos de lectura"
+    title = "Duración de lectura (P26) por periodo y nivel de FLN",
+    x = "Periodo de levantamiento",
+    y = "Minutos continuos de lectura",
+    fill = "Nivel de FLN"
   ) +
-  theme_minimal() +
-  guides(fill = "none")
+  theme_minimal()
 ```
 
-Los percentiles y la mediana sugieren si los niveles altos de FLN concentran tiempos de lectura más extensos o si existen asimetrías significativas en cada estrato.
+Los diagramas de cajas muestran la dispersión dentro de cada periodo y cómo cambian las medianas para FLN alto y bajo; una caída pronunciada en 2021 indicaría pérdida de retención lectora.
 
 ```{r dispersion_fln}
 ggplot(datos, aes(x = FLN_score, y = P26, color = FLN_cat)) +
   geom_point(alpha = 0.5) +
   geom_smooth(method = "lm", se = FALSE, color = "black") +
+  facet_wrap(~Periodo) +
   labs(
-    title = "Relación entre FLN y minutos continuos de lectura",
+    title = "Relación entre FLN y minutos continuos de lectura por periodo",
     x = "Puntaje continuo FLN",
-    y = "Minutos continuos de lectura"
+    y = "Minutos continuos de lectura",
+    color = "Nivel de FLN"
   ) +
   theme_minimal()
 ```
 
-La recta de tendencia permite identificar si el FLN ejerce un efecto lineal positivo sobre el tiempo de lectura, así como la magnitud de la variabilidad residual.
+Las facetas por periodo permiten evaluar si el efecto lineal del FLN sobre la duración de lectura se mantiene estable a lo largo del tiempo o si se intensifica después de la pandemia.
 
 ```{r histograma_p26}
-ggplot(datos, aes(x = P26)) +
-  geom_histogram(binwidth = 5, fill = "dodgerblue", color = "white", alpha = 0.8) +
+ggplot(datos, aes(x = P26, fill = Periodo)) +
+  geom_histogram(binwidth = 5, color = "white", alpha = 0.8) +
+  facet_wrap(~Periodo, ncol = 1) +
   labs(
-    title = "Distribución general de minutos continuos de lectura",
+    title = "Distribución de minutos continuos de lectura por periodo",
     x = "Minutos continuos (P26)",
     y = "Frecuencia"
   ) +
+  theme_minimal() +
+  guides(fill = "none")
+```
+
+El histograma facetado destaca si la distribución de `P26` se desplazó a valores menores durante la pandemia y si hubo recuperación posterior.
+
+### Resumen temporal FLN × Periodo
+
+El resumen de medias por periodo y nivel de FLN sirve como punto de partida para los contrastes inferenciales.
+
+```{r resumen_temporal_tabla}
+resumen_p26
+```
+
+```{r grafica_lineas_periodo}
+lineas_periodo <- datos %>%
+  group_by(Periodo, FLN_cat) %>%
+  summarise(
+    media = mean(P26, na.rm = TRUE),
+    sd = sd(P26, na.rm = TRUE),
+    n = sum(!is.na(P26)),
+    .groups = "drop"
+  )
+
+ggplot(lineas_periodo, aes(x = Periodo, y = media, color = FLN_cat, group = FLN_cat)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2) +
+  labs(
+    title = "Evolución de P26 por periodo y nivel de FLN",
+    x = "Periodo",
+    y = "Media de minutos continuos de lectura",
+    color = "Nivel de FLN"
+  ) +
   theme_minimal()
 ```
 
-El histograma muestra si la distribución de `P26` es unimodal, sesgada o multimodal, información clave para validar los supuestos del análisis inferencial.
+La gráfica de líneas facilita interpretar la trayectoria 2019 → 2021 → 2023: una caída pronunciada en 2021 seguida de recuperación parcial en 2023 reflejaría el impacto de la pandemia, mientras que una pendiente más suave para FLN alto señalaría el efecto protector frente a la pérdida de concentración lectora.
 
 ## Intervalos de confianza (α = 0.04)
 
@@ -134,7 +187,7 @@ ic_media <- t.test(datos$P26, conf.level = 0.96)
 ic_media
 ```
 
-La distribución *t* se utiliza porque la desviación estándar poblacional es desconocida; el intervalo sugiere el rango plausible de la media poblacional de minutos continuos.
+La distribución *t* se utiliza porque la desviación estándar poblacional es desconocida; el intervalo sugiere el rango plausible de la media poblacional de minutos continuos considerando todas las mediciones de 2019 a 2023.
 
 2. **Diferencia de medias (FLN Alto vs Bajo, t de Welch).**
 
@@ -145,7 +198,7 @@ ic_diferencia <- t.test(p26_alto, p26_bajo, conf.level = 0.96, var.equal = FALSE
 ic_diferencia
 ```
 
-Se emplea la versión de Welch al no asumir varianzas iguales. El intervalo indica si la brecha de minutos entre FLN alto y bajo es estadísticamente relevante.
+Se emplea la versión de Welch al no asumir varianzas iguales. El intervalo indica si la brecha de minutos entre FLN alto y bajo es estadísticamente relevante a lo largo del periodo pandémico y posterior.
 
 3. **Varianza de P26 (χ²).**
 
@@ -158,7 +211,7 @@ ic_varianza <- c((n_total - 1) * s2 / chi_left, (n_total - 1) * s2 / chi_right)
 ic_varianza
 ```
 
-El intervalo basado en χ² estima la variabilidad poblacional del tiempo de lectura, útil para contrastar escenarios de dispersión creciente.
+El intervalo basado en χ² estima la variabilidad poblacional del tiempo de lectura durante el trienio analizado, útil para contrastar si la dispersión aumentó en los años de pandemia.
 
 4. **Proporción de lectura corta (< 20 minutos).**
 
@@ -173,23 +226,38 @@ ic_prop <- prop.test(
 ic_prop
 ```
 
-La aproximación normal (con corrección de continuidad) estima la proporción poblacional que mantiene sesiones breves; se puede ajustar el umbral según la definición institucional de lectura corta.
+La aproximación normal (con corrección de continuidad) estima la proporción poblacional que mantiene sesiones breves durante y después de la pandemia; se puede ajustar el umbral según la definición institucional de lectura corta.
 
 ## Pruebas de hipótesis (α = 0.04)
 
 Cada prueba reporta hipótesis nulas y alternativas, estadístico de prueba, valor crítico y p-value, complementando con conclusiones directas.
 
-### ANOVA: `P26 ~ FLN_cat`
+### ANOVA: `P26 ~ FLN_cat * Periodo`
 
-- H₀: la media de `P26` es igual en los tres niveles de FLN.
-- H₁: al menos un nivel muestra una media distinta.
+- H₀: la media de `P26` es igual entre todos los niveles de FLN y entre los tres periodos, sin interacción.
+- H₁: al menos un efecto principal o la interacción FLN × Periodo modifica la media de `P26`.
 
 ```{r anova_fln}
-modelo_anova <- aov(P26 ~ FLN_cat, data = datos)
-glance(modelo_anova)
+modelo_anova <- aov(P26 ~ FLN_cat * Periodo, data = datos)
+anova_summary <- summary(modelo_anova)
+anova_summary
+
+df_fln <- anova_summary[[1]]["FLN_cat", "Df"]
+df_periodo <- anova_summary[[1]]["Periodo", "Df"]
+df_interaccion <- anova_summary[[1]]["FLN_cat:Periodo", "Df"]
+df_res <- anova_summary[[1]]["Residuals", "Df"]
+
+fcrit_fln <- qf(1 - 0.04, df_fln, df_res)
+fcrit_periodo <- qf(1 - 0.04, df_periodo, df_res)
+fcrit_interaccion <- qf(1 - 0.04, df_interaccion, df_res)
+c(
+  Fcrit_FLN = fcrit_fln,
+  Fcrit_Periodo = fcrit_periodo,
+  Fcrit_Interaccion = fcrit_interaccion
+)
 ```
 
-El valor crítico proviene de la distribución *F* con gl\_1 = k − 1 y gl\_2 = n − k. Si el estadístico F supera el valor crítico al α = 0.04 o el p-value < 0.04, se rechaza H₀ y se concluye que el FLN influye en la duración de lectura. En caso contrario, no se evidencia diferencia significativa.
+Los valores críticos se obtienen de la distribución *F* correspondiente a cada efecto (FLN, Periodo e interacción). Se rechaza H₀ a α = 0.04 cuando el estadístico F supera el valor crítico o el p-value es menor al nivel de significancia, lo que indicaría que el FLN alto amortiguó la caída de minutos durante y después de la pandemia.
 
 ### t de Welch: `P26` (FLN Alto vs Bajo)
 
@@ -199,9 +267,13 @@ El valor crítico proviene de la distribución *F* con gl\_1 = k − 1 y gl\_2 =
 ```{r t_welch}
 prueba_welch <- t.test(p26_alto, p26_bajo, alternative = "two.sided", conf.level = 0.96)
 prueba_welch
+
+df_welch <- prueba_welch$parameter
+tcrit_welch <- qt(1 - 0.04 / 2, df = df_welch)
+tcrit_welch
 ```
 
-El estadístico *t* se compara con el valor crítico bilateral a α = 0.04. Un p-value menor que el nivel de significancia sugiere que la exposición alta al FLN se asocia con sesiones de lectura más extensas.
+El estadístico *t* se contrasta con el valor crítico bilateral a α = 0.04 (`tcrit_welch`). Un p-value menor que el nivel de significancia sugiere que el FLN alto funcionó como un factor protector al sostener sesiones de lectura más extensas durante y después de la pandemia.
 
 ### χ² de independencia: `FLN_cat` vs lectura corta
 
@@ -215,13 +287,16 @@ datos <- datos %>%
 tabla_cont <- table(datos$FLN_cat, datos$lectura_corta)
 prueba_chi <- chisq.test(tabla_cont, correct = FALSE)
 prueba_chi
+
+chi_critico <- qchisq(1 - 0.04, df = prueba_chi$parameter)
+chi_critico
 ```
 
-El estadístico χ² se contrasta con el valor crítico correspondiente a `(k - 1)(m - 1)` grados de libertad. Un resultado significativo implica que los niveles de FLN influyen en la probabilidad de mantener sesiones cortas.
+El estadístico χ² se contrasta con el valor crítico `chi_critico`, calculado para `(k - 1)(m - 1)` grados de libertad. Un resultado significativo implicaría que los niveles de FLN modifican la probabilidad de mantener sesiones cortas durante y después de la pandemia.
 
 ## Verificación de supuestos
 
-1. **Normalidad.** Evaluada con Shapiro-Wilk o gráficos QQ en los residuos del modelo ANOVA y en las distribuciones de `P26` por nivel de FLN.
+1. **Normalidad.** Evaluada con Shapiro-Wilk o gráficos QQ en los residuos del modelo ANOVA factorial (`FLN_cat × Periodo`) y en las distribuciones de `P26` dentro de cada combinación.
 
 ```{r normalidad}
 residuos_anova <- residuals(modelo_anova)
@@ -235,15 +310,15 @@ qqplot_anova
 
 Si la normalidad no se cumple, se recomienda utilizar pruebas no paramétricas como Kruskal–Wallis o transformaciones logarítmicas.
 
-2. **Homogeneidad de varianzas.** Contrastada con la prueba de Levene.
+2. **Homogeneidad de varianzas.** Contrastada con la prueba de Levene considerando los tres niveles de FLN y los tres periodos.
 
 ```{r homocedasticidad}
-leveneTest(P26 ~ FLN_cat, data = datos)
+leveneTest(P26 ~ interaction(FLN_cat, Periodo), data = datos)
 ```
 
 Ante varianzas heterogéneas, se mantienen estimadores robustos (ANOVA de Welch) o se recurre a comparaciones no paramétricas (p. ej., prueba de Brown–Forsythe).
 
-3. **Conteos esperados en χ².** Se verifican que todos sean superiores a 5 para garantizar la validez asintótica.
+3. **Conteos esperados en χ².** Se verifican que todos sean superiores a 5 para garantizar la validez asintótica al comparar FLN con lectura corta.
 
 ```{r conteos_esperados}
 prueba_chi$expected
@@ -253,9 +328,4 @@ Si los conteos esperados son bajos, se sugiere combinar categorías o emplear un
 
 ## Conclusiones
 
-El análisis inferencial propuesto permite determinar si el tiempo de lectura ha disminuido y si el FLN funciona como un factor protector frente a la reducción de minutos continuos. Dependiendo de los resultados:
-
-- Si la media de `P26` ha caído y la brecha entre FLN alto y bajo es significativa, se concluye que el fomento lector temprano ayuda a sostener sesiones más largas.
-- Las pruebas de hipótesis y los intervalos ofrecen evidencia cuantitativa para orientar programas de intervención centrados en los hogares y escuelas.
-
-Entre las limitaciones destacan el uso de variables auto-reportadas y la posible colinealidad entre indicadores de FLN. Los próximos pasos incluyen incorporar otras métricas de actividad lectora (como número de libros leídos, `P4`) y explorar modelos longitudinales que permitan seguir cohortes a lo largo del tiempo.
+Los resultados permiten observar la evolución del tiempo de lectura durante la pandemia. Si bien el promedio general puede haberse reducido, el grupo con alto FLN muestra una caída menor, lo que sugiere un efecto protector del fomento lector temprano frente a la pérdida de concentración lectora.
