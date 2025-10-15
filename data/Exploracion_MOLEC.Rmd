@@ -44,7 +44,7 @@ summary(M23)
 vars_fln_casa <- c("p34_1", "p34_2", "p34_3")
 vars_fln_escuela <- c("p36_1", "p36_2", "p36_3", "p36_4")
 vars_fln <- c(vars_fln_casa, vars_fln_escuela)
-vars_ala <- c("p4", "p10", "p16", "p26")
+vars_ala <- c("p26")
 
 vars_interes <- c(vars_ala, vars_fln, "factor")
 
@@ -66,7 +66,7 @@ summary(M23_sel)
 Las preguntas seleccionadas utilizan el código `0` para indicar que la pregunta no aplica. Se convierte ese código en `NA` antes de combinar las bases.
 
 ```{r}
-vars_cero <- c("p4", "p10", "p16", "p26")
+vars_cero <- c("p26")
 vars_no_recuerda <- c("p34_1", "p34_2", "p34_3", "p36_1", "p36_2", "p36_3", "p36_4")
 
 limpia_ceros <- function(df, year) {
@@ -93,11 +93,11 @@ summary(molec_light)
 
 ```{r}
 output_dir <- if (data_dir == ".") "." else "data"
-output_path <- file.path(output_dir, "nuevo_molec_light_2019_2021_2023.csv")
+output_path <- file.path(output_dir, "nuevote_molec_light_2019_2021_2023.csv")
 dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
 
 write.csv(molec_light, output_path, row.names = FALSE)
 output_path
 ```
 
-El archivo `data/molec_light_2019_2021_2023.csv` contiene las tres bases con las variables de interés y los valores `0` convertidos a `NA`.
+El archivo `data/nuevo_molec_light_2019_2021_2023.csv` contiene las tres bases con las variables de interés y los valores `0` convertidos a `NA`.

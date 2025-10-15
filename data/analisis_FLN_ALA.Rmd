@@ -1,0 +1,263 @@
+---
+title: "Análisis Inferencial FLN y ALA"
+author: "Equipo de investigación"
+date: "`r Sys.Date()`"
+output: "word_document"
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+library(dplyr)
+library(ggplot2)
+library(broom)
+library(car)
+```
+
+## Introducción
+
+Se cargan los datos combinados del cuestionario 2019–2023.
+
+```{r carga_datos}
+datos <- readr::read_csv(
+  "nuevote_molec_light_2019_2021_2023.csv",
+  locale = readr::locale(encoding = "Latin1"),
+  show_col_types = FALSE
+)
+
+datos <- datos %>%
+  rename(
+    P26 = p26,
+    P34_1 = p34_1,
+    P34_2 = p34_2,
+    P34_3 = p34_3,
+    P36_1 = p36_1,
+    P36_2 = p36_2,
+    P36_3 = p36_3,
+    P36_4 = p36_4
+  )
+
+names(datos)
+dim(datos)
+```
+
+El análisis se centra en la relación entre el fomento a la lectura en la niñez (FLN) y la actividad lectora actual (ALA), entendida como los minutos continuos que una persona dedica a leer en una sesión (`P26`). La pregunta de investigación se formula así: **¿El FLN contribuye a mantener sesiones de lectura más prolongadas en la adultez?**
+
+El objetivo principal es evaluar si las personas leen menos tiempo seguido y, en particular, determinar si contar con estímulos lectores tempranos amortigua esa reducción. El documento expone una estrategia inferencial para contrastar la influencia del FLN en la retención lectora.
+
+## Construcción de variables
+
+- **FLN (Fomento a la Lectura en la Niñez).** Se modela a partir de los reactivos que describen experiencias lectoras en el hogar y la escuela mediante un modelo de mínimos cuadrados ordinarios con `P26` como variable dependiente. El puntaje ajustado (`FLN_score`) resume el aporte del conjunto de ítems al tiempo de lectura actual.
+- **Validación alternativa.** Como verificación robusta se propone un Análisis de Componentes Principales (PCA) sobre los indicadores de FLN para confirmar la consistencia del constructo. Si los componentes convergen con el puntaje del modelo lineal, se mantiene la solución; de lo contrario, se reevalúa la ponderación.
+- **ALA (Actividad Lectora Actual).** Se define como `P26`, la cantidad de minutos continuos de lectura durante la sesión más reciente.
+- **Clasificación de FLN.** Se construye una variable categórica `FLN_cat` con tres niveles —Bajo, Medio, Alto— usando los cuantiles 0.33 y 0.66 del `FLN_score`. Esta segmentación permite contrastar diferencias de tiempo de lectura entre grupos comparables.
+
+```{r construccion_fln}
+# puntaje continuo a partir del modelo lineal
+modelo_fln <- lm(P26 ~ P34_1 + P34_2 + P34_3 + P36_1 + P36_2 + P36_3 + P36_4, data = datos)
+
+datos <- datos %>%
+  mutate(
+    FLN_score = predict(modelo_fln, newdata = datos),
+    FLN_cat = cut(
+      FLN_score,
+      breaks = quantile(FLN_score, probs = c(0, 1 / 3, 2 / 3, 1), na.rm = TRUE),
+      include.lowest = TRUE,
+      labels = c("Bajo", "Medio", "Alto")
+    )
+  )
+```
+
+## Estadística descriptiva
+
+La exploración inicial resume el comportamiento de `P26` por nivel de FLN y visualiza la relación entre ambas variables.
+
+```{r tabla_resumen}
+resumen_p26 <- datos %>%
+  group_by(FLN_cat) %>%
+  summarise(
+    n = sum(!is.na(P26)),
+    media = mean(P26, na.rm = TRUE),
+    sd = sd(P26, na.rm = TRUE)
+  )
+resumen_p26
+```
+
+El nivel de FLN se asocia con cambios observables en la media y la dispersión del tiempo de lectura.
+
+```{r boxplot_p26}
+ggplot(datos, aes(x = FLN_cat, y = P26, fill = FLN_cat)) +
+  geom_boxplot(outlier.color = "firebrick") +
+  labs(
+    title = "Duración de lectura (P26) por nivel de FLN",
+    x = "Nivel de FLN",
+    y = "Minutos continuos de lectura"
+  ) +
+  theme_minimal() +
+  guides(fill = "none")
+```
+
+Los percentiles y la mediana sugieren si los niveles altos de FLN concentran tiempos de lectura más extensos o si existen asimetrías significativas en cada estrato.
+
+```{r dispersion_fln}
+ggplot(datos, aes(x = FLN_score, y = P26, color = FLN_cat)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm", se = FALSE, color = "black") +
+  labs(
+    title = "Relación entre FLN y minutos continuos de lectura",
+    x = "Puntaje continuo FLN",
+    y = "Minutos continuos de lectura"
+  ) +
+  theme_minimal()
+```
+
+La recta de tendencia permite identificar si el FLN ejerce un efecto lineal positivo sobre el tiempo de lectura, así como la magnitud de la variabilidad residual.
+
+```{r histograma_p26}
+ggplot(datos, aes(x = P26)) +
+  geom_histogram(binwidth = 5, fill = "#366092", color = "white", alpha = 0.8) +
+  labs(
+    title = "Distribución general de minutos continuos de lectura",
+    x = "Minutos continuos (P26)",
+    y = "Frecuencia"
+  ) +
+  theme_minimal()
+```
+
+El histograma muestra si la distribución de `P26` es unimodal, sesgada o multimodal, información clave para validar los supuestos del análisis inferencial.
+
+## Intervalos de confianza (α = 0.04)
+
+Se construyen intervalos al 96% de confianza, especificando la distribución base y el criterio de interpretación.
+
+1. **Media de P26 (t de Student).**
+
+```{r ic_media}
+ic_media <- t.test(datos$P26, conf.level = 0.96)
+ic_media
+```
+
+La distribución *t* se utiliza porque la desviación estándar poblacional es desconocida; el intervalo sugiere el rango plausible de la media poblacional de minutos continuos.
+
+2. **Diferencia de medias (FLN Alto vs Bajo, t de Welch).**
+
+```{r ic_diferencia}
+p26_alto <- datos %>% filter(FLN_cat == "Alto") %>% pull(P26)
+p26_bajo <- datos %>% filter(FLN_cat == "Bajo") %>% pull(P26)
+ic_diferencia <- t.test(p26_alto, p26_bajo, conf.level = 0.96, var.equal = FALSE)
+ic_diferencia
+```
+
+Se emplea la versión de Welch al no asumir varianzas iguales. El intervalo indica si la brecha de minutos entre FLN alto y bajo es estadísticamente relevante.
+
+3. **Varianza de P26 (χ²).**
+
+```{r ic_varianza}
+n_total <- sum(!is.na(datos$P26))
+s2 <- var(datos$P26, na.rm = TRUE)
+chi_left <- qchisq(0.98, df = n_total - 1)
+chi_right <- qchisq(0.02, df = n_total - 1)
+ic_varianza <- c((n_total - 1) * s2 / chi_left, (n_total - 1) * s2 / chi_right)
+ic_varianza
+```
+
+El intervalo basado en χ² estima la variabilidad poblacional del tiempo de lectura, útil para contrastar escenarios de dispersión creciente.
+
+4. **Proporción de lectura corta (< 20 minutos).**
+
+```{r ic_proporcion}
+lectura_corta <- mean(datos$P26 < 20, na.rm = TRUE)
+n_corta <- sum(!is.na(datos$P26))
+ic_prop <- prop.test(
+  x = sum(datos$P26 < 20, na.rm = TRUE),
+  n = n_corta,
+  conf.level = 0.96
+)
+ic_prop
+```
+
+La aproximación normal (con corrección de continuidad) estima la proporción poblacional que mantiene sesiones breves; se puede ajustar el umbral según la definición institucional de lectura corta.
+
+## Pruebas de hipótesis (α = 0.04)
+
+Cada prueba reporta hipótesis nulas y alternativas, estadístico de prueba, valor crítico y p-value, complementando con conclusiones directas.
+
+### ANOVA: `P26 ~ FLN_cat`
+
+- H₀: la media de `P26` es igual en los tres niveles de FLN.
+- H₁: al menos un nivel muestra una media distinta.
+
+```{r anova_fln}
+modelo_anova <- aov(P26 ~ FLN_cat, data = datos)
+glance(modelo_anova)
+```
+
+El valor crítico proviene de la distribución *F* con gl\_1 = k − 1 y gl\_2 = n − k. Si el estadístico F supera el valor crítico al α = 0.04 o el p-value < 0.04, se rechaza H₀ y se concluye que el FLN influye en la duración de lectura. En caso contrario, no se evidencia diferencia significativa.
+
+### t de Welch: `P26` (FLN Alto vs Bajo)
+
+- H₀: las medias de `P26` son iguales entre los niveles alto y bajo de FLN.
+- H₁: las medias de `P26` difieren entre ambos niveles.
+
+```{r t_welch}
+prueba_welch <- t.test(p26_alto, p26_bajo, alternative = "two.sided", conf.level = 0.96)
+prueba_welch
+```
+
+El estadístico *t* se compara con el valor crítico bilateral a α = 0.04. Un p-value menor que el nivel de significancia sugiere que la exposición alta al FLN se asocia con sesiones de lectura más extensas.
+
+### χ² de independencia: `FLN_cat` vs lectura corta
+
+- H₀: FLN y lectura corta (< 20 minutos) son independientes.
+- H₁: existe asociación entre FLN y lectura corta.
+
+```{r chi_cuadrada}
+datos <- datos %>%
+  mutate(lectura_corta = factor(ifelse(P26 < 20, "Sí", "No")))
+
+tabla_cont <- table(datos$FLN_cat, datos$lectura_corta)
+prueba_chi <- chisq.test(tabla_cont, correct = FALSE)
+prueba_chi
+```
+
+El estadístico χ² se contrasta con el valor crítico correspondiente a `(k - 1)(m - 1)` grados de libertad. Un resultado significativo implica que los niveles de FLN influyen en la probabilidad de mantener sesiones cortas.
+
+## Verificación de supuestos
+
+1. **Normalidad.** Evaluada con Shapiro-Wilk o gráficos QQ en los residuos del modelo ANOVA y en las distribuciones de `P26` por nivel de FLN.
+
+```{r normalidad}
+residuos_anova <- residuals(modelo_anova)
+shapiro.test(residuos_anova)
+
+qqplot_anova <- ggplot(data.frame(residuos = residuos_anova), aes(sample = residuos)) +
+  stat_qq() + stat_qq_line() + theme_minimal() +
+  labs(title = "QQ-plot de residuos ANOVA")
+qqplot_anova
+```
+
+Si la normalidad no se cumple, se recomienda utilizar pruebas no paramétricas como Kruskal–Wallis o transformaciones logarítmicas.
+
+2. **Homogeneidad de varianzas.** Contrastada con la prueba de Levene.
+
+```{r homocedasticidad}
+leveneTest(P26 ~ FLN_cat, data = datos)
+```
+
+Ante varianzas heterogéneas, se mantienen estimadores robustos (ANOVA de Welch) o se recurre a comparaciones no paramétricas (p. ej., prueba de Brown–Forsythe).
+
+3. **Conteos esperados en χ².** Se verifican que todos sean superiores a 5 para garantizar la validez asintótica.
+
+```{r conteos_esperados}
+prueba_chi$expected
+```
+
+Si los conteos esperados son bajos, se sugiere combinar categorías o emplear un test exacto de Fisher.
+
+## Conclusiones
+
+El análisis inferencial propuesto permite determinar si el tiempo de lectura ha disminuido y si el FLN funciona como un factor protector frente a la reducción de minutos continuos. Dependiendo de los resultados:
+
+- Si la media de `P26` ha caído y la brecha entre FLN alto y bajo es significativa, se concluye que el fomento lector temprano ayuda a sostener sesiones más largas.
+- Las pruebas de hipótesis y los intervalos ofrecen evidencia cuantitativa para orientar programas de intervención centrados en los hogares y escuelas.
+
+Entre las limitaciones destacan el uso de variables auto-reportadas y la posible colinealidad entre indicadores de FLN. Los próximos pasos incluyen incorporar otras métricas de actividad lectora (como número de libros leídos, `P4`) y explorar modelos longitudinales que permitan seguir cohortes a lo largo del tiempo.
